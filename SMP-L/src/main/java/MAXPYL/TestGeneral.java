@@ -12,7 +12,7 @@ public class TestGeneral {
         int default_no_improve = 50;
         double default_alpha = 0.9;
         String default_dataset = "70k";
-
+        // test commit
 
         long[] thresholds = new long[]{50000000 , 150000000 , 250000000 , 375000000 , 500000000};
         int[] iter_cons = new int[]{20,30,40,50,60};
