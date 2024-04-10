@@ -8,26 +8,26 @@ public class TestGeneral {
 
     public static void main(String args[]) throws InterruptedException, CloneNotSupportedException, IOException {
         long default_threshold = 250000000;
-        int default_iter_con = 40;
+        int default_iter_con = 1; // changed
         int default_no_improve = 50;
         double default_alpha = 0.9;
-        String default_dataset = "70k";
+        String default_dataset = "10k";
         // test commit for branch
 
-        long[] thresholds = new long[]{50000000 , 150000000 , 250000000 , 375000000 , 500000000};
+        long[] thresholds = new long[]{50000000}; //, 150000000 , 250000000 , 375000000 , 500000000};
         int[] iter_cons = new int[]{20,30,40,50,60};
         int[] no_improves = new int[]{10,30,50,70,90};
         double[] alphas = new double[]{0.9 , 0.998};
-        String[] datasets = new String[]{"10k","20k","30k","35k","40k","50k","60k","70k"};
+        String[] datasets = new String[]{"10k" };//,"20k","30k","35k","40k","50k","60k","70k"};
 
 
 
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , default_dataset);
-        var_iter_con(default_threshold , iter_cons , default_no_improve , default_alpha , default_dataset);
-        var_alphas(default_threshold , default_iter_con , default_no_improve , alphas , default_dataset);
-        var_datasets(default_threshold , default_iter_con , default_no_improve , default_alpha , datasets);
-        var_nomove(default_threshold , default_iter_con , no_improves , default_alpha , default_dataset);
-        //var_cores(default_threshold , default_iter_con , default_no_improve , default_alpha , default_dataset, num_cores);
+       // var_iter_con(default_threshold , iter_cons , default_no_improve , default_alpha , default_dataset);
+        //var_alphas(default_threshold , default_iter_con , default_no_improve , alphas , default_dataset);
+        //var_datasets(default_threshold , default_iter_con , default_no_improve , default_alpha , datasets);
+        //var_nomove(default_threshold , default_iter_con , no_improves , default_alpha , default_dataset);
+       // already commented out  //var_cores(default_threshold , default_iter_con , default_no_improve , default_alpha , default_dataset, num_cores);
 
     }
 
@@ -40,7 +40,7 @@ public class TestGeneral {
             ArrayList<Long> runtime = new ArrayList<>();
             ArrayList<Long> p = new ArrayList<>();
 
-            for(int i = 0 ; i < 10 ; i++)
+            for(int i = 0 ; i < 1 ; i++) //changed to 1 from 10
             {
                 maxp mp = new maxp(thre, default_iter_con , default_no_improve , default_alpha , default_dataset);
                 runtime.add(mp.get_total_time());
