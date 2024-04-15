@@ -12,6 +12,7 @@ import org.opengis.filter.Filter;
 
 import com.google.common.geometry.*; // S2 library
 
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,7 +26,7 @@ public class Preprocess {
     public static ArrayList<GeoArea> GeoSetBuilder(String dataset) throws IOException {
         ArrayList<GeoArea> geoAreas = new ArrayList<>();
         FeatureCollection<SimpleFeatureType, SimpleFeature> collection = preprocess(dataset);
-        ArrayList<S2Polyline> polygons = initial_construct(collection, geoAreas, dataset);
+        ArrayList<S2Polygon> polygons = initial_construct(collection, geoAreas, dataset);
         //System.out.println("construction finished");
         setNeighbors(polygons, geoAreas);
         //System.out.println("setNeighbor finished");
@@ -73,8 +74,8 @@ public class Preprocess {
         return source.getFeatures(filter);
     }
 
-    private static ArrayList<S2Polyline> initial_construct(FeatureCollection<SimpleFeatureType, SimpleFeature> collection, ArrayList<GeoArea> geoAreas, String dataset) {
-        ArrayList<S2Polyline> polylines = new ArrayList<>();
+    private static ArrayList<S2Polygon> initial_construct(FeatureCollection<SimpleFeatureType, SimpleFeature> collection, ArrayList<GeoArea> geoAreas, String dataset) {
+        ArrayList<S2Polygon> polygons = new ArrayList<>();
         int geo_index = 0;
         try (FeatureIterator<SimpleFeature> features = collection.features()) {
             while (features.hasNext()) {
@@ -99,9 +100,10 @@ public class Preprocess {
                 for (Coordinate coordinate : coor) {
                     verticesLoop.add(S2LatLng.fromDegrees(coordinate.getY(), coordinate.getX()).toPoint()); // is the x lat or lng?
                 }
+                S2Loop outerLoop = new S2Loop(verticesLoop);
 
-                S2Polyline polylineS2 = new S2Polyline(verticesLoop); // testing
-                polylines.add(polylineS2); // testing
+                S2Polygon polygonS2 = new S2Polygon(outerLoop);
+                polygons.add(polygonS2); // testing
 
                 GeoArea newArea = new GeoArea(geo_index, internal_attr, extensive_attr, verticesLoop);
                 geo_index++;
@@ -111,11 +113,11 @@ public class Preprocess {
             }
         }
 
-        return polylines;
+        return polygons;
 
     }
 
-    private static void setNeighbors(ArrayList<S2Polyline> polylines, ArrayList<GeoArea> areas) {
+    private static void setNeighbors(ArrayList<S2Polygon> polygons, ArrayList<GeoArea> areas) {
 //        for (int i = 0; i < polygons.size(); i++) {
 //
 //            for (int j = i + 1; j < polygons.size(); j++) {
@@ -136,17 +138,16 @@ public class Preprocess {
 //        }
         long totalTime = 0;
         long startTime = System.nanoTime();
-        for (int i = 0; i < polylines.size(); i++) {
-            for (int j = i + 1; j < polylines.size(); j++) {
-                if (polylines.get(i).intersects(polylines.get(j))) {
+        for (int i = 0; i < polygons.size(); i++) {
+            for (int j = i + 1; j < polygons.size(); j++) {
+                if (areAdjacent(polygons.get(i), polygons.get(j))) {
                     areas.get(i).add_neighbor(j);
                     areas.get(j).add_neighbor(i);
                 }
             }
-
             long duration = (System.nanoTime() - startTime) / 1000000;
             totalTime = totalTime + duration;
-            double percent = (double) i / polylines.size() * 100;
+            double percent = (double) i / polygons.size() * 100;
             System.out.println("Time: " + totalTime + "ms" + " Progress: " + percent + "%");
 
         }
@@ -156,4 +157,29 @@ public class Preprocess {
             }
         }
     }
+    public static boolean areAdjacent(S2Polygon polygon1, S2Polygon polygon2) {
+        for (int i = 0; i < polygon1.numLoops(); i++) {
+            S2Loop loop1 = polygon1.loop(i);
+            for (int j = 0; j < loop1.numVertices(); j++) {
+                S2Point vertex1a = loop1.vertex(j);
+                S2Point vertex1b = loop1.vertex((j + 1) % loop1.numVertices());
+                for (int k = 0; k < polygon2.numLoops(); k++) {
+                    S2Loop loop2 = polygon2.loop(k);
+                    for (int l = 0; l < loop2.numVertices(); l++) {
+                        S2Point vertex2a = loop2.vertex(l);
+                        S2Point vertex2b = loop2.vertex((l + 1) % loop2.numVertices());
+                        if ((vertex1a.equals(vertex2a) && vertex1b.equals(vertex2b)) ||
+                                (vertex1a.equals(vertex2b) && vertex1b.equals(vertex2a))) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+
+
+
 }
