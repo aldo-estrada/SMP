@@ -75,8 +75,6 @@ public class Preprocess {
     }
 
     private static ArrayList<S2CellUnion> initial_construct(FeatureCollection<SimpleFeatureType, SimpleFeature> collection, ArrayList<GeoArea> geoAreas, String dataset) {
-        ArrayList<S2Polygon> polygons = new ArrayList<>();
-        ArrayList<S2Polyline> polylines = new ArrayList<>();
         ArrayList<S2CellUnion> polygonCells = new ArrayList<>();
         int geo_index = 0;
         try (FeatureIterator<SimpleFeature> features = collection.features()) {
@@ -102,7 +100,6 @@ public class Preprocess {
                 List<S2Point> verticesLoop = new ArrayList<>();
                 ArrayList<S2CellId> cellIds = new ArrayList<>();
                 for (Coordinate coordinate : coor) {
-                    verticesLoop.add(S2LatLng.fromDegrees(coordinate.getY(), coordinate.getX()).toPoint()); // is the x lat or lng?
                     S2Point point = S2LatLng.fromDegrees(coordinate.getY(), coordinate.getX()).toPoint();
                     S2Cell cell = new S2Cell(point);
                     cellIds.add(cell.id());
@@ -110,17 +107,11 @@ public class Preprocess {
                 S2CellUnion cellUnion = new S2CellUnion();
                 cellUnion.initFromCellIds(cellIds);
                 polygonCells.add(cellUnion);
-                S2Loop outerLoop = new S2Loop(verticesLoop);
 
-                S2Polygon polygonS2 = new S2Polygon(outerLoop);
-                polygons.add(polygonS2); // testing
-                S2Polyline polylineS2 = new S2Polyline(verticesLoop); // testing
-                polylines.add(polylineS2); // testing
 
                 GeoArea newArea = new GeoArea(geo_index, internal_attr, extensive_attr, verticesLoop);
                 geo_index++;
                 geoAreas.add(newArea);
-
 
             }
         }
@@ -129,93 +120,7 @@ public class Preprocess {
 
     }
 
-    private static void setNeighbors(ArrayList<S2Polyline> polygons, ArrayList<GeoArea> areas) {
-//        for (int i = 0; i < polygons.size(); i++) {
-//
-//            for (int j = i + 1; j < polygons.size(); j++) {
-//
-//                if (polygons.get(i).intersects(polygons.get(j))) {
-//
-//                    Geometry intersection = polygons.get(i).intersection(polygons.get(j));
-//
-//                    if (intersection.getGeometryType() != "Point") {
-//
-//                        areas.get(i).add_neighbor(j);
-//                        areas.get(j).add_neighbor(i);
-//                        //System.out.println("neighbor added");
-//
-//                    } // end if
-//                } // end if
-//            } // end for
-//        }
-        long totalTime = 0;
-        long startTime = System.nanoTime();
-        for (int i = 0; i < polygons.size(); i++) {
-            for (int j = i + 1; j < polygons.size(); j++) {
-                if (areAdjacent2(polygons.get(i), polygons.get(j))) {
-                    areas.get(i).add_neighbor(j);
-                    areas.get(j).add_neighbor(i);
-                }
-            }
-            long duration = (System.nanoTime() - startTime) / 1000000;
-            totalTime = totalTime + duration;
-            double percent = (double) i / polygons.size() * 100;
-            System.out.println("Time: " + totalTime + "ms" + " Progress: " + percent + "%");
 
-        }
-        for (GeoArea area : areas) {
-            if (area.get_neigh_area_index().size() == 0) {
-                System.out.println("area has only one neighbor " + list_vals.get(area.get_geo_index()));
-            }
-        }
-    }
-    public static boolean areAdjacent(S2Polygon polygon1, S2Polygon polygon2) {
-        S2LatLngRect rect1 = polygon1.getRectBound();
-        S2LatLngRect rect2 = polygon2.getRectBound();
-        if (rect1.intersects(rect2)) {
-            return true;
-        }
-        for (int i = 0; i < polygon1.numLoops(); i++) {
-            S2Loop loop1 = polygon1.loop(i);
-            for (int j = 0; j < loop1.numVertices(); j++) {
-                S2Point vertex1a = loop1.vertex(j);
-                S2Point vertex1b = loop1.vertex((j + 1) % loop1.numVertices());
-                for (int k = 0; k < polygon2.numLoops(); k++) {
-                    S2Loop loop2 = polygon2.loop(k);
-                    for (int l = 0; l < loop2.numVertices(); l++) {
-                        S2Point vertex2a = loop2.vertex(l);
-                        S2Point vertex2b = loop2.vertex((l + 1) % loop2.numVertices());
-                        if ((vertex1a.equals(vertex2a) && vertex1b.equals(vertex2b)) ||
-                                (vertex1a.equals(vertex2b) && vertex1b.equals(vertex2a))) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-        return false;
-    }
-    public static boolean areAdjacent2(S2Polyline polygon1, S2Polyline polygon2) {
-        S2LatLngRect rect1 = polygon1.getRectBound();
-        S2LatLngRect rect2 = polygon2.getRectBound();
-        if (!rect1.intersects(rect2)) {
-            return false;
-        }
-//        for (int i = 0; i < polygon1.numVertices() - 1; i++) {
-//            S2Point vertex1a = polygon1.vertex(i);
-//            S2Point vertex1b = polygon1.vertex(i + 1);
-//            for (int j = 0; j < polygon2.numVertices() - 1; j++) {
-//                S2Point vertex2a = polygon2.vertex(j);
-//                S2Point vertex2b = polygon2.vertex(j + 1);
-//                if ((vertex1a.equals(vertex2a) && vertex1b.equals(vertex2b)) ||
-//                        (vertex1a.equals(vertex2b) && vertex1b.equals(vertex2a))) {
-//                    return true;
-//                }
-//            }
-//        }
-        return true;
-//        return polygon1.intersects(polygon2);
-    }
 
     private static void setNeighborsCells(ArrayList<S2CellUnion> polygons, ArrayList<GeoArea> areas) {
         long totalTime = 0;
@@ -232,11 +137,13 @@ public class Preprocess {
                     }
                 }
             }
-            long duration = (System.nanoTime() - startTime) / 1000000;
-            totalTime = totalTime + duration;
-            double percent = (double) i / polygons.size() * 100;
-            System.out.println("Time: " + totalTime + "ms" + " Progress: " + percent + "%");
-
+            if ((i % 100 == 0) && (!polygons.isEmpty())) {
+                double result = (double) i / polygons.size();
+                long duration = (System.nanoTime() - startTime) / 100000000;
+//                totalTime = totalTime + duration;
+                System.out.println(result * 100.00 + "%");
+                System.out.println("Time: " + duration + "ms");
+            }
         }
         for (GeoArea area : areas) {
             if (area.get_neigh_area_index().size() == 0) {
