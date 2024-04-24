@@ -18,11 +18,18 @@ public class TestGeneral {
         int[] iter_cons = new int[]{20,30,40,50,60};
         int[] no_improves = new int[]{10,30,50,70,90};
         double[] alphas = new double[]{0.9 , 0.998};
-        String[] datasets = new String[]{"10k" };//,"20k","30k","35k","40k","50k","60k","70k"};
+        String[] datasets = new String[]{"10k","20k","30k","35k","40k","50k","60k","70k"};
 
 
 
-        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , default_dataset);
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "10k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "20k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "30k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "35k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "40k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "50k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "60k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "70k");
        // var_iter_con(default_threshold , iter_cons , default_no_improve , default_alpha , default_dataset);
         //var_alphas(default_threshold , default_iter_con , default_no_improve , alphas , default_dataset);
         //var_datasets(default_threshold , default_iter_con , default_no_improve , default_alpha , datasets);
@@ -48,6 +55,7 @@ public class TestGeneral {
                 hetero.add(mp.get_hetero());
                 p.add(mp.get_p());
             }
+            System.out.println();
             System.out.println("the current threshold is " + thre + " the avg runtime is " + compute_long_ave(runtime) + " the avg p is " + compute_long_ave(p) + " the avg hetero is " + compute_long_ave(hetero) + "ave before hetero is " + compute_long_ave(before_hetero) + "avg hetero impro " + ((compute_long_ave(before_hetero) - compute_long_ave(hetero)) * 1.0 / compute_long_ave(before_hetero)));
         }
     }
