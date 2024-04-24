@@ -101,6 +101,8 @@ public class Preprocess {
 
     private static void setNeighbors(ArrayList<Geometry> polygons , ArrayList<GeoArea> areas)
     {
+//        long totalTime = 0;
+        long startTime = System.currentTimeMillis();
         for (int i = 0; i < polygons.size(); i++) {
 
             for (int j = i + 1; j < polygons.size(); j++) {
@@ -118,8 +120,15 @@ public class Preprocess {
                     } // end if
                 } // end if
             } // end for
+//            if ((i % 100 == 0) && (!polygons.isEmpty())) {
+//                double result = (double) i / polygons.size();
+//                long duration = (System.nanoTime() - startTime) / 100000000;
+//                System.out.println(result * 100.00 + "%");
+//                System.out.println("Time: " + duration + "ms");
+//            }
         }
-
+        long end_time = System.currentTimeMillis();
+        System.out.println("Time: " + (end_time - startTime) + "ms");
 
         for(GeoArea area : areas)
         {
