@@ -123,8 +123,8 @@ public class Preprocess {
 
 
     private static void setNeighborsCells(ArrayList<S2CellUnion> polygons, ArrayList<GeoArea> areas) {
-        long totalTime = 0;
-        long startTime = System.nanoTime();
+//        long totalTime = 0;
+        long startTime = System.currentTimeMillis();
         for (int i = 0; i < polygons.size(); i++) {
             for (int j = i + 1; j < polygons.size(); j++) {
                 if (polygons.get(i).intersects(polygons.get(j))) {
@@ -137,14 +137,15 @@ public class Preprocess {
                     }
                 }
             }
-            if ((i % 100 == 0) && (!polygons.isEmpty())) {
-                double result = (double) i / polygons.size();
-                long duration = (System.nanoTime() - startTime) / 100000000;
-//                totalTime = totalTime + duration;
-                System.out.println(result * 100.00 + "%");
-                System.out.println("Time: " + duration + "ms");
-            }
+//            if ((i % 100 == 0) && (!polygons.isEmpty())) {
+//                double result = (double) i / polygons.size();
+//                long duration = (System.nanoTime() - startTime) / 100000000;
+//                System.out.println(result * 100.00 + "%");
+//                System.out.println("Time: " + duration + "ms");
+//            }
         }
+        long end_time = System.currentTimeMillis();
+        System.out.println("Time: " + (end_time - startTime) + "ms");
         for (GeoArea area : areas) {
             if (area.get_neigh_area_index().size() == 0) {
                 System.out.println("area has only one neighbor " + list_vals.get(area.get_geo_index()));
