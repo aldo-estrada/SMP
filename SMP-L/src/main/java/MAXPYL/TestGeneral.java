@@ -23,13 +23,21 @@ public class TestGeneral {
 
 
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "10k");
+        System.out.println("finished 10k");
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "20k");
+        System.out.println("finished 20k");
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "30k");
+        System.out.println("finished 30k");
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "35k");
+        System.out.println("finished 35k");
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "40k");
+        System.out.println("finished 40k");
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "50k");
+        System.out.println("finished 50k");
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "60k");
+        System.out.println("finished 60k");
         var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "70k");
+        System.out.println("finished 70k");
        // var_iter_con(default_threshold , iter_cons , default_no_improve , default_alpha , default_dataset);
         //var_alphas(default_threshold , default_iter_con , default_no_improve , alphas , default_dataset);
         //var_datasets(default_threshold , default_iter_con , default_no_improve , default_alpha , datasets);
