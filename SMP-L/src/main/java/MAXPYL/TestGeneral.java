@@ -11,10 +11,10 @@ public class TestGeneral {
         int default_iter_con = 1; // change from 40 to 1
         int default_no_improve = 50;
         double default_alpha = 0.9;
-        String default_dataset = "30k"; // change from 70k to 10k
+        String default_dataset = "10k"; // change from 70k to 10k
         // test commit
 
-        long[] thresholds = new long[]{50000000}; // , 150000000 , 250000000 , 375000000 , 500000000};
+        long[] thresholds = new long[]{50000000 , 150000000 , 250000000 , 375000000 , 500000000};
         int[] iter_cons = new int[]{20,30,40,50,60};
         int[] no_improves = new int[]{10,30,50,70,90};
         double[] alphas = new double[]{0.9 , 0.998};
@@ -22,7 +22,23 @@ public class TestGeneral {
 
 
 
-        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , default_dataset);
+
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "10k");
+        System.out.println("finished 10k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "20k");
+        System.out.println("finished 20k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "30k");
+        System.out.println("finished 30k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "35k");
+        System.out.println("finished 35k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "40k");
+        System.out.println("finished 40k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "50k");
+        System.out.println("finished 50k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "60k");
+        System.out.println("finished 60k");
+        var_threshold(thresholds , default_iter_con , default_no_improve , default_alpha , "70k");
+        System.out.println("finished 70k");
      //   var_iter_con(default_threshold , iter_cons , default_no_improve , default_alpha , default_dataset);
        // var_alphas(default_threshold , default_iter_con , default_no_improve , alphas , default_dataset);
        // var_datasets(default_threshold , default_iter_con , default_no_improve , default_alpha , datasets);
