@@ -40,7 +40,7 @@ public class TestGeneral {
         System.out.println("finished 70k");
        // var_iter_con(default_threshold , iter_cons , default_no_improve , default_alpha , default_dataset);
         //var_alphas(default_threshold , default_iter_con , default_no_improve , alphas , default_dataset);
-        //var_datasets(default_threshold , default_iter_con , default_no_improve , default_alpha , datasets);
+        var_datasets(default_threshold , default_iter_con , default_no_improve , default_alpha , datasets);
         //var_nomove(default_threshold , default_iter_con , no_improves , default_alpha , default_dataset);
        // already commented out  //var_cores(default_threshold , default_iter_con , default_no_improve , default_alpha , default_dataset, num_cores);
 

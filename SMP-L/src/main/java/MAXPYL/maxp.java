@@ -36,7 +36,7 @@ public class maxp {
         all_areas = Preprocess.GeoSetBuilder(dataset);
         long end_preprocess = System.currentTimeMillis();
         preprocess_time += (end_preprocess - start_preprocess);
-
+        System.out.println("Preprocess finished " + preprocess_time + " ms");
 
         long start_time = System.currentTimeMillis();
         best_p = -1;;
