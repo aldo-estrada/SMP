@@ -32,6 +32,8 @@ import org.opengis.filter.Filter;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 
+import com.google.common.geometry.*; // S2 library
+
 
 
 class DataPartition {
@@ -82,29 +84,57 @@ class DataPartition {
 }
 
 
-class BoundsFilter implements CoordinateFilter {
+//class BoundsFilter implements CoordinateFilter { // change this
+//
+//    double minx, miny, maxx, maxy;
+//    boolean first = true;
+//
+//    public void filter(Coordinate c) {
+//
+//        if (first) {
+//
+//            minx = maxx = c.x;
+//            miny = maxy = c.y;
+//            first = false;
+//        } else {
+//            minx = Math.min(minx, c.x);
+//            miny = Math.min(miny, c.y);
+//            maxx = Math.max(maxx, c.x);
+//            maxy = Math.max(maxy, c.y);
+//        }
+//    }
+//
+//    Rectangle2D getBounds() {
+//
+//        return new Rectangle2D.Double(minx, miny, maxx - minx, maxy - miny);
+//    }
+//}
 
-    double minx, miny, maxx, maxy;
+
+class BoundsFilter {
+    S2LatLng minLatLng, maxLatLng;
     boolean first = true;
 
-    public void filter(Coordinate c) {
+    public void filter(S2CellUnion cellUnion) {
+        for (S2CellId cellId : cellUnion) {
+            S2LatLng latLng = new S2LatLng(cellId.toPoint());
+            if (first) {
+                minLatLng = maxLatLng = latLng;
+                first = false;
+            } else {
+                double minLat = Math.min(minLatLng.lat().degrees(), latLng.lat().degrees());
+                double minLng = Math.min(minLatLng.lng().degrees(), latLng.lng().degrees());
+                double maxLat = Math.max(maxLatLng.lat().degrees(), latLng.lat().degrees());
+                double maxLng = Math.max(maxLatLng.lng().degrees(), latLng.lng().degrees());
 
-        if (first) {
-
-            minx = maxx = c.x;
-            miny = maxy = c.y;
-            first = false;
-        } else {
-            minx = Math.min(minx, c.x);
-            miny = Math.min(miny, c.y);
-            maxx = Math.max(maxx, c.x);
-            maxy = Math.max(maxy, c.y);
+                minLatLng = S2LatLng.fromDegrees(minLat, minLng);
+                maxLatLng = S2LatLng.fromDegrees(maxLat, maxLng);
+            }
         }
     }
 
-    Rectangle2D getBounds() {
-
-        return new Rectangle2D.Double(minx, miny, maxx - minx, maxy - miny);
+    S2LatLngRect getBounds() {
+        return new S2LatLngRect(minLatLng, maxLatLng);
     }
 }
 
@@ -402,7 +432,9 @@ class GrowRegionsThread implements Callable<Partition> {
     HashMap<Integer, HashMap<Integer, List>> neighbors;
     ArrayList<Long> household;
     ArrayList<Long> population;
-    ArrayList<Geometry> polygons;
+//    ArrayList<Geometry> polygons;
+    ArrayList<S2CellUnion> polygonCells;
+
     ArrayList<DataPartition> dataPartitions;
     int cores;
     int random;
@@ -412,7 +444,8 @@ class GrowRegionsThread implements Callable<Partition> {
                              HashMap<Integer, HashMap<Integer, List>> neighbors,
                              ArrayList<Long> household,
                              ArrayList<Long> population,
-                             ArrayList<Geometry> polygons,
+//                             ArrayList<Geometry> polygons,
+                             ArrayList<S2CellUnion> polygonCells,
                              ArrayList<DataPartition> dataPartitions,
                              int cores,
                              int random) {
@@ -422,7 +455,9 @@ class GrowRegionsThread implements Callable<Partition> {
         this.household = household;
         this.population = population;
         this.neighbors = neighbors;
-        this.polygons = polygons;
+//        this.polygons = polygons;
+        this.polygonCells = polygonCells;
+
         this.dataPartitions = dataPartitions;
         this.cores = cores;
         this.random = random;
@@ -800,22 +835,26 @@ class EnclavesAssignmentThread implements Callable<Partition> {
 
     ArrayList<Long> population;
     ArrayList<Long> household;
-    ArrayList<Geometry> polygons;
+//    ArrayList<Geometry> polygons;
+    ArrayList<S2CellUnion> polygonCells;
     ArrayList<List> neighbors;
     Partition currentPartition;
     int i;
 
     public EnclavesAssignmentThread(ArrayList<Long> population,
                                     ArrayList<Long> household,
-                                    ArrayList<Geometry> polygons,
+//                                    ArrayList<Geometry> polygons,
+                                    ArrayList<S2CellUnion> polygonCells,
                                     ArrayList<List> neighbors,
                                     Partition currentPartition,
                                     int i) {
 
         this.population = population;
         this.household = household;
-        this.polygons = polygons;
+//        this.polygons = polygons;
+        this.polygonCells = polygonCells;
         this.neighbors = neighbors;
+
         this.currentPartition = new Partition(currentPartition);
         this.i = i;
     }
@@ -953,7 +992,7 @@ class EnclavesAssignmentThread implements Callable<Partition> {
 
 
 
-public class SMPP {
+public class SMPP { // **** NEEDS TO BE CHANGED ****
 
 
     public static Random rand = new Random();
@@ -961,7 +1000,7 @@ public class SMPP {
     public static void readFiles(int dataSet,
                                  ArrayList<Long> household,
                                  ArrayList<Long> population,
-                                 ArrayList<Geometry> polygons) throws IOException {
+                                 ArrayList<S2CellUnion> polygonCells) throws IOException { // changed ArrayList<Geometry> polygons
 
         String dbfFile = null;
         String shpFile = null;
@@ -1223,7 +1262,18 @@ public class SMPP {
                 //System.out.print(": ");
                 //System.out.println(feature.getDefaultGeometryProperty().getValue());
                 Geometry polygon = (Geometry) feature.getDefaultGeometry();
-                polygons.add(polygon);
+                Coordinate[] coor = polygon.getCoordinates();
+                // coverting the polygon to a list of S2CellIds
+                ArrayList<S2CellId> cellIds = new ArrayList<>();
+                for (Coordinate coordinate : coor) {
+                    S2Point point = S2LatLng.fromDegrees(coordinate.getY(), coordinate.getX()).toPoint();
+                    S2Cell cell = new S2Cell(point);
+                    cellIds.add(cell.id());
+                }
+                S2CellUnion cellUnion = new S2CellUnion();
+                cellUnion.initFromCellIds(cellIds);
+                polygonCells.add(cellUnion);
+//                polygons.add(polygon);
             } // end while
         } // end
 
@@ -1231,7 +1281,38 @@ public class SMPP {
     } // end readFiles
 
 
-    public static ArrayList<List> createNeighborsList(ArrayList<Geometry> polygons) {
+//    public static ArrayList<List> createNeighborsList(ArrayList<Geometry> polygons) {
+//
+//        ArrayList<List> neighbors = new ArrayList<>();
+//
+//        for (int i = 0; i < polygons.size(); i++) {
+//
+//            neighbors.add(new ArrayList());
+//        }
+//
+//
+//        for (int i = 0; i < polygons.size(); i++) {
+//
+//            for (int j = i + 1; j < polygons.size(); j++) {
+//
+//                if (polygons.get(i).intersects(polygons.get(j))) {
+//
+//                    Geometry intersection = polygons.get(i).intersection(polygons.get(j));
+//
+//                    if (intersection.getGeometryType() != "Point") {
+//
+//                        neighbors.get(i).add(j);
+//                        neighbors.get(j).add(i);
+//
+//                    } // end if
+//                } // end if
+//            } // end for
+//        } // end for
+//
+//        return neighbors;
+//    } // end createNeighborsList
+
+    public static ArrayList<List> createNeighborsList(ArrayList<S2CellUnion> polygons) {
 
         ArrayList<List> neighbors = new ArrayList<>();
 
@@ -1246,10 +1327,10 @@ public class SMPP {
             for (int j = i + 1; j < polygons.size(); j++) {
 
                 if (polygons.get(i).intersects(polygons.get(j))) {
+                    S2CellUnion intersection = new S2CellUnion();
+                    intersection.getIntersection(polygons.get(i), polygons.get(j));
 
-                    Geometry intersection = polygons.get(i).intersection(polygons.get(j));
-
-                    if (intersection.getGeometryType() != "Point") {
+                    if (intersection.size() != 1) { // check if the intersection is a point
 
                         neighbors.get(i).add(j);
                         neighbors.get(j).add(i);
@@ -1280,7 +1361,7 @@ public class SMPP {
 
     public static ArrayList<DataPartition> partitionData(int nColumns,
                                                          int nRows,
-                                                         ArrayList<Geometry> polygons,
+                                                         ArrayList<S2CellUnion> polygonCells,
                                                          ArrayList<Integer> areas,
                                                          ArrayList<List> neighbors) throws IOException {
 
@@ -1291,25 +1372,36 @@ public class SMPP {
         ArrayList<DataPartition> dataPartitions = new ArrayList<>();
 
         BoundsFilter boundsFilter = new BoundsFilter();
-        for (Geometry area : polygons) {
-            area.apply(boundsFilter);
+//        for (Geometry area : polygonCells) {
+//            area.apply(boundsFilter);
+//        }
+//
+//        Rectangle2D MBR = boundsFilter.getBounds();
+//
+//        double minX = MBR.getMinX();
+//        double minY = MBR.getMinY();
+//        double maxX = MBR.getMaxX();
+//        double maxY = MBR.getMaxY();
+        for (S2CellUnion cellUnion : polygonCells) {
+            boundsFilter.filter(cellUnion);
         }
 
-        Rectangle2D MBR = boundsFilter.getBounds();
+        S2LatLngRect MBR = boundsFilter.getBounds();
 
-        double minX = MBR.getMinX();
-        double minY = MBR.getMinY();
-        double maxX = MBR.getMaxX();
-        double maxY = MBR.getMaxY();
+        double minX = MBR.lo().lat().degrees();
+        double minY = MBR.lo().lng().degrees();
+        double maxX = MBR.hi().lat().degrees();
+        double maxY = MBR.hi().lng().degrees();
 
         ReferencedEnvelope envelope =
                 new ReferencedEnvelope(minX, maxX, minY, maxY, DefaultGeographicCRS.WGS84);
 
         partitionsBoundaries = createPartitionsBoundaries(nColumns, nRows, envelope);
 
-        for (int i = 0; i < areas.size(); i++) {
+        for (int i = 0; i < polygonCells.size(); i++) {
 
-            Envelope areaEnvelope = polygons.get(i).getEnvelopeInternal();
+            S2CellUnion cellUnion = polygonCells.get(i);
+            S2LatLngRect areaEnvelope = cellUnion.getRectBound();
             boolean assigned = false;
 
             for (DataPartition partition : partitionsBoundaries) {
@@ -1361,41 +1453,80 @@ public class SMPP {
                 dataPartitions.add(partition);
             }
         }
+//        for (S2CellUnion cellUnion : polygonCells) {
+//            boundsFilter.filter(cellUnion);
+//        }
+//
+//        S2LatLngRect MBR = boundsFilter.getBounds();
+//
+//        double minX = MBR.lo().lat().degrees();
+//        double minY = MBR.lo().lng().degrees();
+//        double maxX = MBR.hi().lat().degrees();
+//        double maxY = MBR.hi().lng().degrees();
+//
+//        ReferencedEnvelope envelope =
+//                new ReferencedEnvelope(minX, maxX, minY, maxY, DefaultGeographicCRS.WGS84);
+//
+//        partitionsBoundaries = createPartitionsBoundaries(nColumns, nRows, envelope);
+//
+//        for (int i = 0; i < areas.size(); i++) {
+//
+////            Envelope areaEnvelope = polygons.get(i).getEnvelopeInternal();
+//            S2CellUnion cellUnion = cellUnions.get(i);
+//            S2LatLngRect areaEnvelope = cellUnion.getRectBound();
+//            boolean assigned = false;
+//
+//            for (DataPartition partition : partitionsBoundaries) {
+//
+//                ReferencedEnvelope partitionEnvelope = partition.getEnvelope();
+//
+//                if (isWithin(areaEnvelope, partitionEnvelope)) {
+//
+//                    partition.addArea(i);
+//                    unassignedAreas.remove((Integer) i);
+//                    assignedAreas.add(i);
+//                    assigned = true;
+//                    break;
+//                } // end if
+//            } // end for
+//
+//            if (!assigned) {
+//                enclaves.add(i);
+//            }
+//        } // end for
+//
+//        for (DataPartition partition : partitionsBoundaries) {
+//
+//            if (!partition.getAreas().isEmpty()) {
+//
+//                ArrayList<ArrayList> components = connectedComponents(partition.getAreas(), neighbors);
+//                if (components.size() > 1) {
+//
+//                    int max = Integer.MIN_VALUE;
+//                    int index = 0;
+//
+//                    for (int i = 0; i < components.size(); i++) {
+//
+//                        if (components.get(i).size() > max) {
+//                            max = components.get(i).size();
+//                            index = i;
+//                        }
+//                    }
+//
+//                    partition.getAreas().clear();
+//                    partition.getAreas().addAll(components.get(index));
+//                    components.remove(index);
+//
+//                    for (ArrayList<Integer> component : components) {
+//                        enclaves.addAll(component);
+//                        assignedAreas.removeAll(component);
+//                    }
+//                }
+//                dataPartitions.add(partition);
+//            }
+//        }
 
-        // writing the data partitions before enclaves assignment to a csv file
-        /*for (DataPartition partition : dataPartitions) {
 
-            FileWriter outputFile1 = new FileWriter(new File("/Users/hessah/Desktop/Research/Output/1DataPartitions/partition" + partition.getID() + "before" + ".csv"));
-            CSVWriter csv1 = new CSVWriter(outputFile1);
-            String[] header1 = {"Area ID", "Area Polygon in WKT"};
-            csv1.writeNext(header1);
-
-            ArrayList<Integer> partitionAreas = partition.getAreas();
-
-            for (int i = 0; i < partitionAreas.size(); i++) {
-
-                String areaID = partitionAreas.get(i).toString();
-
-                String[] row = {areaID, polygons.get(partitionAreas.get(i)).toText()};
-                csv1.writeNext(row);
-            }
-            csv1.close();
-        }*/
-
-        // writing enclaves before enclaves assignment to a csv file
-        /*FileWriter outputFile1 = new FileWriter(new File("/Users/hessah/Desktop/Research/Output/1DataPartitions/enclaves.csv"));
-        CSVWriter csv1 = new CSVWriter(outputFile1);
-        String[] header1 = {"Area ID", "Area Polygon in WKT"};
-        csv1.writeNext(header1);
-
-        for (int i = 0; i < enclaves.size(); i++) {
-
-            String areaID = enclaves.get(i).toString();
-
-            String[] row = {areaID, polygons.get(enclaves.get(i)).toText()};
-            csv1.writeNext(row);
-        }
-        csv1.close();*/
 
         unassignedAssignment(neighbors, dataPartitions, enclaves, assignedAreas);
 
@@ -1447,13 +1578,18 @@ public class SMPP {
     } // end createPartitionsBoundaries
 
 
-    public static boolean isWithin(Envelope areaEnvelope,
+    public static boolean isWithin(S2LatLngRect MBR,
                                    ReferencedEnvelope partitionEnvelope) {
 
-        double areaMinX = areaEnvelope.getMinX();
-        double areaMinY = areaEnvelope.getMinY();
-        double areaMaxX = areaEnvelope.getMaxX();
-        double areaMaxY = areaEnvelope.getMaxY();
+//        double areaMinX = areaEnvelope.getMinX();
+//        double areaMinY = areaEnvelope.getMinY();
+//        double areaMaxX = areaEnvelope.getMaxX();
+//        double areaMaxY = areaEnvelope.getMaxY();
+
+        double areaMinX = MBR.lo().lat().degrees();
+        double areaMinY = MBR.lo().lng().degrees();
+        double areaMaxX = MBR.hi().lat().degrees();
+        double areaMaxY = MBR.hi().lng().degrees();
 
         double partitionMinX = partitionEnvelope.getMinX();
         double partitionMinY = partitionEnvelope.getMinY();
@@ -2577,220 +2713,221 @@ public class SMPP {
         int nColumns = Integer.parseInt(args[6]);
         int cores = Integer.parseInt(args[7]);
         int random = Integer.parseInt(args[8]);*/
+        for (int dataset = 5; dataset <= 11; dataset++) {
 
 
-        int maxItr = 40;
-        long threshold = 2000000000;
-        int lengthTabu = 100;
-        double t = 1;
-        int convSA = 90;
-        double alpha = 0.9;
-        int dataset = 5;
-        int nRows = 4;
-        int nColumns = 4;
-        int cores = 4;
-        int random = 1;
+            int maxItr = 40;
+            long threshold = 2000000000;
+            int lengthTabu = 100;
+            double t = 1;
+            int convSA = 90;
+            double alpha = 0.9;
+//            int dataset = 5;
+            int nRows = 4;
+            int nColumns = 4;
+            int cores = 4;
+            int random = 1;
 
 
-        System.out.println("maxItr: " + maxItr);
-        System.out.println("Threshold: " + threshold);
-        System.out.println("convSA: " + convSA);
-        System.out.println("alpha: " + alpha);
-        System.out.println("Dataset: " + dataset);
-        System.out.println("Rows: " + nRows);
-        System.out.println("Columns: " + nColumns);
-        System.out.println("Cores: " + cores);
-        System.out.println("Random: " + random);
-        System.out.println();
+            System.out.println("maxItr: " + maxItr);
+            System.out.println("Threshold: " + threshold);
+            System.out.println("convSA: " + convSA);
+            System.out.println("alpha: " + alpha);
+            System.out.println("Dataset: " + dataset);
+            System.out.println("Rows: " + nRows);
+            System.out.println("Columns: " + nColumns);
+            System.out.println("Cores: " + cores);
+            System.out.println("Random: " + random);
+            System.out.println();
 
 
+            // ********************************************************************
+            // **** READING FILES ****
+            // ********************************************************************
+
+            System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("Reading files . . .");
+            System.out.println("-----------------------------------------------------------------------------------");
+
+            long startReadingFile = System.currentTimeMillis();
+
+            // dissimilarity attribute col#9 j AWATER
+            ArrayList<Long> population = new ArrayList<>();
+            // spatially extensive attribute col#8 i ALAND
+            ArrayList<Long> household = new ArrayList<>();
+            // areas as polygons
+//        ArrayList<Geometry> polygons = new ArrayList<>();
+            ArrayList<S2CellUnion> polygons = new ArrayList<>();
 
 
-        // ********************************************************************
-        // **** READING FILES ****
-        // ********************************************************************
+            readFiles(dataset, household, population, polygons);
 
-        System.out.println("-----------------------------------------------------------------------------------");
-        System.out.println("Reading files . . .");
-        System.out.println("-----------------------------------------------------------------------------------");
+            ArrayList<Integer> areas = new ArrayList<>();
+            for (int i = 0; i < polygons.size(); i++) {
+                areas.add(i);
+            }
 
-        long startReadingFile = System.currentTimeMillis();
+            System.out.println("Number of areas: " + areas.size());
 
-        // dissimilarity attribute col#9 j AWATER
-        ArrayList<Long> population = new ArrayList<>();
-        // spatially extensive attribute col#8 i ALAND
-        ArrayList<Long> household = new ArrayList<>();
-        // areas as polygons
-        ArrayList<Geometry> polygons = new ArrayList<>();
-
-        readFiles(dataset, household, population, polygons);
-
-        ArrayList<Integer> areas = new ArrayList<>();
-        for (int i = 0; i < polygons.size(); i++) {
-            areas.add(i);
-        }
-
-        System.out.println("Number of areas: " + areas.size());
-
-        long endReadingFile = System.currentTimeMillis();
-        float totalReadingFile = (endReadingFile - startReadingFile) / 1000F;
-        System.out.println("Total time for Reading the Files is : " + totalReadingFile + "\n\n");
+            long endReadingFile = System.currentTimeMillis();
+            float totalReadingFile = (endReadingFile - startReadingFile) / 1000F;
+            System.out.println("Total time for Reading the Files is : " + totalReadingFile + "\n\n");
 
 
-        // ********************************************************************
-        // **** FINDING THE NEIGHBORS FOR EACH AREA ****
-        // ********************************************************************
+            // ********************************************************************
+            // **** FINDING THE NEIGHBORS FOR EACH AREA ****
+            // ********************************************************************
 
-        System.out.println("-----------------------------------------------------------------------------------");
-        System.out.println("Finding neighbors . . .");
-        System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("Finding neighbors . . .");
+            System.out.println("-----------------------------------------------------------------------------------");
 
-        long startFindingNeighbors = System.currentTimeMillis();
+            long startFindingNeighbors = System.currentTimeMillis();
 
-        ArrayList<List> neighbors = createNeighborsList(polygons);
+            ArrayList<List> neighbors = createNeighborsList(polygons);
 
-        long endFindingNeighbors = System.currentTimeMillis();
-        float totalFindingNeighbors = (endFindingNeighbors - startFindingNeighbors) / 1000F;
-        System.out.println("Total time for Finding the Neighbors is: " + totalFindingNeighbors + "\n\n");
+            long endFindingNeighbors = System.currentTimeMillis();
+            float totalFindingNeighbors = (endFindingNeighbors - startFindingNeighbors) / 1000F;
+            System.out.println("Total time for Finding the Neighbors is: " + totalFindingNeighbors + "\n\n");
 
-        // print neighbors list
-        //printNeighborsList(neighbors);
-
-
-        // ********************************************************************
-        // **** CREATING DATA PARTITIONS ****
-        // ********************************************************************
-
-        System.out.println("-----------------------------------------------------------------------------------");
-        System.out.println("Creating data partitions . . .");
-        System.out.println("-----------------------------------------------------------------------------------");
-
-        long startPartitioning = System.currentTimeMillis();
-
-        ArrayList<DataPartition> dataPartitions = partitionData(nColumns, nRows, polygons, areas, neighbors);
-
-        long endPartitioning = System.currentTimeMillis();
-        float totalPartitioning = (endPartitioning - startPartitioning) / 1000F;
-        System.out.println("Total time for Creating Data Partitions is: " + totalPartitioning + "\n\n");
-
-        // writing the final data partitions to a CSV file
-        //writingDataPartitionsToFile(dataPartitions, polygons);
+            // print neighbors list
+            //printNeighborsList(neighbors);
 
 
-        // ********************************************************************
-        // **** FINDING THE NEIGHBORS WITHIN PARTITIONS ****
-        // ********************************************************************
+            // ********************************************************************
+            // **** CREATING DATA PARTITIONS ****
+            // ********************************************************************
 
-        System.out.println("-----------------------------------------------------------------------------------");
-        System.out.println("Finding neighbors within each partition . . .");
-        System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("Creating data partitions . . .");
+            System.out.println("-----------------------------------------------------------------------------------");
 
-        long startFindingNeighbors1 = System.currentTimeMillis();
+            long startPartitioning = System.currentTimeMillis();
 
-        HashMap<Integer, HashMap<Integer, List>> partitionsNeighbors = createNeighborsList(neighbors, dataPartitions);
+            ArrayList<DataPartition> dataPartitions = partitionData(nColumns, nRows, polygons, areas, neighbors);
 
-        long endFindingNeighbors1 = System.currentTimeMillis();
-        float totalFindingNeighbors1 = (endFindingNeighbors1 - startFindingNeighbors1) / 1000F;
-        System.out.println("Total time for Finding the Neighbors Within Partitions is: " + totalFindingNeighbors1 + "\n");
+            long endPartitioning = System.currentTimeMillis();
+            float totalPartitioning = (endPartitioning - startPartitioning) / 1000F;
+            System.out.println("Total time for Creating Data Partitions is: " + totalPartitioning + "\n\n");
 
-        // print partitions neighbors list
-        //printPartitionsNeighborsList(partitionsNeighbors);
-
-        float total = totalPartitioning + totalFindingNeighbors1;
-        System.out.println("Total time for Data Partitioning Phase: " + total + "\n\n");
+            // writing the final data partitions to a CSV file
+            //writingDataPartitionsToFile(dataPartitions, polygons);
 
 
-        // ********************************************************************
-        // **** CONSTRUCTION PHASE ****
-        // ********************************************************************
+            // ********************************************************************
+            // **** FINDING THE NEIGHBORS WITHIN PARTITIONS ****
+            // ********************************************************************
 
-        int maxP = 0;
-        Partition bestP;
-        ArrayList<Partition> partitionsBeforeEnclaves = new ArrayList<>();
-        Partition bestFeasiblePartition = new Partition();
+            System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("Finding neighbors within each partition . . .");
+            System.out.println("-----------------------------------------------------------------------------------");
 
-        // **** GROW REGIONS ****
+            long startFindingNeighbors1 = System.currentTimeMillis();
 
-        System.out.println("-----------------------------------------------------------------------------------");
-        System.out.println("Growing the regions . . .");
-        System.out.println("-----------------------------------------------------------------------------------");
+            HashMap<Integer, HashMap<Integer, List>> partitionsNeighbors = createNeighborsList(neighbors, dataPartitions);
 
-        long startGrowRegions = System.currentTimeMillis();
+            long endFindingNeighbors1 = System.currentTimeMillis();
+            float totalFindingNeighbors1 = (endFindingNeighbors1 - startFindingNeighbors1) / 1000F;
+            System.out.println("Total time for Finding the Neighbors Within Partitions is: " + totalFindingNeighbors1 + "\n");
 
-        ExecutorService growRegionsExecutor = Executors.newFixedThreadPool(cores);
+            // print partitions neighbors list
+            //printPartitionsNeighborsList(partitionsNeighbors);
 
-        List<GrowRegionsThread> growThreads = new ArrayList<>();
-        for (int itr = 0; itr < maxItr; itr++) {
+            float total = totalPartitioning + totalFindingNeighbors1;
+            System.out.println("Total time for Data Partitioning Phase: " + total + "\n\n");
 
-            GrowRegionsThread thread = new GrowRegionsThread(threshold, itr, partitionsNeighbors, household, population, polygons, dataPartitions, cores, random);
-            growThreads.add(thread);
-        }
 
-        List<Future<Partition>> growResult = null;
-        try {
-            growResult = growRegionsExecutor.invokeAll(growThreads);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+            // ********************************************************************
+            // **** CONSTRUCTION PHASE ****
+            // ********************************************************************
 
-        growRegionsExecutor.shutdown();
+            int maxP = 0;
+            Partition bestP;
+            ArrayList<Partition> partitionsBeforeEnclaves = new ArrayList<>();
+            Partition bestFeasiblePartition = new Partition();
 
-        for (int i = 0; i < growResult.size(); i++) {
+            // **** GROW REGIONS ****
 
-            Future<Partition> future = growResult.get(i);
+            System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("Growing the regions . . .");
+            System.out.println("-----------------------------------------------------------------------------------");
 
-            Partition partition = new Partition();
+            long startGrowRegions = System.currentTimeMillis();
 
+            ExecutorService growRegionsExecutor = Executors.newFixedThreadPool(cores);
+
+            List<GrowRegionsThread> growThreads = new ArrayList<>();
+            for (int itr = 0; itr < maxItr; itr++) {
+
+                GrowRegionsThread thread = new GrowRegionsThread(threshold, itr, partitionsNeighbors, household, population, polygons, dataPartitions, cores, random);
+                growThreads.add(thread);
+            }
+
+            List<Future<Partition>> growResult = null;
             try {
-                partition = future.get();
+                growResult = growRegionsExecutor.invokeAll(growThreads);
             } catch (InterruptedException e) {
                 e.printStackTrace();
-            } catch (ExecutionException e) {
-                e.printStackTrace();
             }
 
-            int p = partition.getRegions().size();
+            growRegionsExecutor.shutdown();
 
-            if (p > maxP) {
+            for (int i = 0; i < growResult.size(); i++) {
 
-                HashMap<Integer, Integer> areasWithRegions = createAreasWithRegions(partition);
-                partition.setAreasWithRegions(areasWithRegions);
+                Future<Partition> future = growResult.get(i);
 
-                partitionsBeforeEnclaves.clear();
-                partitionsBeforeEnclaves.add(partition);
-                maxP = p;
+                Partition partition = new Partition();
 
-            } else if (p == maxP) {
+                try {
+                    partition = future.get();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } catch (ExecutionException e) {
+                    e.printStackTrace();
+                }
 
-                HashMap<Integer, Integer> areasWithRegions = createAreasWithRegions(partition);
-                partition.setAreasWithRegions(areasWithRegions);
+                int p = partition.getRegions().size();
 
-                partitionsBeforeEnclaves.add(partition);
+                if (p > maxP) {
 
-            } else if (p < maxP) {
+                    HashMap<Integer, Integer> areasWithRegions = createAreasWithRegions(partition);
+                    partition.setAreasWithRegions(areasWithRegions);
 
-                // pass
+                    partitionsBeforeEnclaves.clear();
+                    partitionsBeforeEnclaves.add(partition);
+                    maxP = p;
+
+                } else if (p == maxP) {
+
+                    HashMap<Integer, Integer> areasWithRegions = createAreasWithRegions(partition);
+                    partition.setAreasWithRegions(areasWithRegions);
+
+                    partitionsBeforeEnclaves.add(partition);
+
+                } else if (p < maxP) {
+
+                    // pass
+                }
             }
-        }
 
-        System.out.println("MaxP: " + maxP);
-        System.out.println("Number of partitions after growing the regions using threads: " + partitionsBeforeEnclaves.size());
+            System.out.println("MaxP: " + maxP);
+            System.out.println("Number of partitions after growing the regions using threads: " + partitionsBeforeEnclaves.size());
 
-        long endGrowRegions = System.currentTimeMillis();
-        float totalGrowRegions = (endGrowRegions - startGrowRegions) / 1000F;
-        System.out.println("Total time for Growing the Regions using threads is : " + totalGrowRegions + "\n\n");
+            long endGrowRegions = System.currentTimeMillis();
+            float totalGrowRegions = (endGrowRegions - startGrowRegions) / 1000F;
+            System.out.println("Total time for Growing the Regions using threads is : " + totalGrowRegions + "\n\n");
 
-        // writing the grow regions phase output to a CSV file
-        //writingPartitionsToFile(partitionsBeforeEnclaves, polygons, "");
+            // writing the grow regions phase output to a CSV file
+            //writingPartitionsToFile(partitionsBeforeEnclaves, polygons, "");
 
 
-        // **** ENCLAVES ASSIGNMENT ****
+            // **** ENCLAVES ASSIGNMENT ****
 
-        System.out.println("-----------------------------------------------------------------------------------");
-        System.out.println("Enclaves Assignment . . .");
-        System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("Enclaves Assignment . . .");
+            System.out.println("-----------------------------------------------------------------------------------");
 
-        long startAssignEnclaves = System.currentTimeMillis();
+            long startAssignEnclaves = System.currentTimeMillis();
 
         /*long minHet = Long.MAX_VALUE;
 
@@ -2839,84 +2976,84 @@ public class SMPP {
             }
         }*/
 
-        long minHet = Long.MAX_VALUE;
+            long minHet = Long.MAX_VALUE;
 
-        for (int i = 0; i < partitionsBeforeEnclaves.size(); i++) {
+            for (int i = 0; i < partitionsBeforeEnclaves.size(); i++) {
 
-            Partition currentPartition = partitionsBeforeEnclaves.get(i);
-            Partition feasiblePartition = enclavesAssignment(population, household, neighbors, currentPartition);
-            long heterogeneity = calculatePartitionH(feasiblePartition, population);
-            feasiblePartition.setDissimilarity(heterogeneity);
-            if (heterogeneity < minHet) {
-                bestFeasiblePartition = feasiblePartition;
-                minHet = heterogeneity;
+                Partition currentPartition = partitionsBeforeEnclaves.get(i);
+                Partition feasiblePartition = enclavesAssignment(population, household, neighbors, currentPartition);
+                long heterogeneity = calculatePartitionH(feasiblePartition, population);
+                feasiblePartition.setDissimilarity(heterogeneity);
+                if (heterogeneity < minHet) {
+                    bestFeasiblePartition = feasiblePartition;
+                    minHet = heterogeneity;
+                }
+                //feasiblePartition.setDissimilarity(heterogeneity);
+                //feasiblePartitions.add(feasiblePartition);
             }
-            //feasiblePartition.setDissimilarity(heterogeneity);
-            //feasiblePartitions.add(feasiblePartition);
-        }
 
-        // writing enclaves assignment output to a cvs file
-        //writingPartitionsToFile(feasiblePartitions, polygons, "/Users/hessah/Desktop/Output/enclaves");
+            // writing enclaves assignment output to a cvs file
+            //writingPartitionsToFile(feasiblePartitions, polygons, "/Users/hessah/Desktop/Output/enclaves");
 
-        long endAssignEnclaves = System.currentTimeMillis();
-        float totalAssignEnclaves = (endAssignEnclaves - startAssignEnclaves) / 1000F;
-        System.out.println("Total time for Assign Enclaves is : " + totalAssignEnclaves + "\n\n");
+            long endAssignEnclaves = System.currentTimeMillis();
+            float totalAssignEnclaves = (endAssignEnclaves - startAssignEnclaves) / 1000F;
+            System.out.println("Total time for Assign Enclaves is : " + totalAssignEnclaves + "\n\n");
 
 
-        // ********************************************************************
-        // **** LOCAL SEARCH PHASE ****
-        // ********************************************************************
+            // ********************************************************************
+            // **** LOCAL SEARCH PHASE ****
+            // ********************************************************************
 
-        System.out.println("-----------------------------------------------------------------------------------");
-        System.out.println("Local Search . . .");
-        System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("-----------------------------------------------------------------------------------");
+            System.out.println("Local Search . . .");
+            System.out.println("-----------------------------------------------------------------------------------");
 
-        long startSearch = System.currentTimeMillis();
+            long startSearch = System.currentTimeMillis();
 
-        long improvement;
-        long oldHeterogeneity;
+            long improvement;
+            long oldHeterogeneity;
 
-        oldHeterogeneity = bestFeasiblePartition.getDissimilarity();
-        bestP = modifiedSA(lengthTabu, convSA, alpha, t, threshold, bestFeasiblePartition, household, population, neighbors);
+            oldHeterogeneity = bestFeasiblePartition.getDissimilarity();
+            bestP = modifiedSA(lengthTabu, convSA, alpha, t, threshold, bestFeasiblePartition, household, population, neighbors);
 
-        long pH = bestP.getDissimilarity();
+            long pH = bestP.getDissimilarity();
 
-        long endSearch = System.currentTimeMillis();
-        float totalSearch = (endSearch - startSearch) / 1000F;
-        System.out.println("Total time for Local Search is : " + totalSearch);
+            long endSearch = System.currentTimeMillis();
+            float totalSearch = (endSearch - startSearch) / 1000F;
+            System.out.println("Total time for Local Search is : " + totalSearch);
 
-        improvement = oldHeterogeneity - pH;
-        float percentage = ((float)improvement/(float)oldHeterogeneity);
-        System.out.println("Heterogeneity before local search: " + oldHeterogeneity);
-        System.out.println("Heterogeneity after local search: " + pH);
-        System.out.println("Improvement in heterogeneity: " + improvement);
-        System.out.println("Percentage of improvement: " + percentage);
-        System.out.println("Max-p: " + maxP);
+            improvement = oldHeterogeneity - pH;
+            float percentage = ((float) improvement / (float) oldHeterogeneity);
+            System.out.println("Heterogeneity before local search: " + oldHeterogeneity);
+            System.out.println("Heterogeneity after local search: " + pH);
+            System.out.println("Improvement in heterogeneity: " + improvement);
+            System.out.println("Percentage of improvement: " + percentage);
+            System.out.println("Max-p: " + maxP);
 
-        float totalTime = totalFindingNeighbors + totalFindingNeighbors1 + totalPartitioning + totalGrowRegions + totalAssignEnclaves + totalSearch;
-        System.out.println("\nTotal time is : " + (totalTime));
+            float totalTime = totalFindingNeighbors + totalFindingNeighbors1 + totalPartitioning + totalGrowRegions + totalAssignEnclaves + totalSearch;
+            System.out.println("\nTotal time is : " + (totalTime));
 
 
-        String path;
-        if (random == 0)
-            //path = "/home/gepspatial/Desktop/maxp/SMPP.csv";
-            path = "SMPP.csv";
-        else
-            //path = "/home/gepspatial/Desktop/maxp/SMPPRandom.csv";
-            path = "SMPPRandom.csv";
-        FileWriter outputFile = new FileWriter(
-                new File(path), true);
-        CSVWriter csv = new CSVWriter(outputFile);
+            String path;
+            if (random == 0)
+                //path = "/home/gepspatial/Desktop/maxp/SMPP.csv";
+                path = "SMPP.csv";
+            else
+                //path = "/home/gepspatial/Desktop/maxp/SMPPRandom.csv";
+                path = "SMPPRandom.csv";
+            FileWriter outputFile = new FileWriter(
+                    new File(path), true);
+            CSVWriter csv = new CSVWriter(outputFile);
 
-        String[] row = {String.valueOf(dataset), String.valueOf(maxItr), String.valueOf(threshold), String.valueOf(convSA), String.valueOf(alpha), String.valueOf(nColumns), String.valueOf(cores),
-                String.valueOf(maxP), String.valueOf(oldHeterogeneity), String.valueOf(pH), String.valueOf(improvement), String.valueOf(percentage),
-                String.valueOf(totalReadingFile), String.valueOf(totalFindingNeighbors), String.valueOf(totalPartitioning), String.valueOf(totalFindingNeighbors1), String.valueOf(totalGrowRegions), String.valueOf(totalAssignEnclaves),
-                String.valueOf(totalSearch), String.valueOf(totalTime)};
-        csv.writeNext(row);
+            String[] row = {String.valueOf(dataset), String.valueOf(maxItr), String.valueOf(threshold), String.valueOf(convSA), String.valueOf(alpha), String.valueOf(nColumns), String.valueOf(cores),
+                    String.valueOf(maxP), String.valueOf(oldHeterogeneity), String.valueOf(pH), String.valueOf(improvement), String.valueOf(percentage),
+                    String.valueOf(totalReadingFile), String.valueOf(totalFindingNeighbors), String.valueOf(totalPartitioning), String.valueOf(totalFindingNeighbors1), String.valueOf(totalGrowRegions), String.valueOf(totalAssignEnclaves),
+                    String.valueOf(totalSearch), String.valueOf(totalTime)};
+            csv.writeNext(row);
 
-        csv.close();
+            csv.close();
 
-        // writing the final output to a CSV file
+            // writing the final output to a CSV file
 
         /*FileWriter outputFile1 = new FileWriter(
                 new File("/Users/hessah/Desktop/BestPartition" + bestP.getPartitionID() + ".csv"));
@@ -2940,7 +3077,7 @@ public class SMPP {
         }
         csv1.close();*/
 
-
+        }// end of for loop
 
 
     } // end main
